@@ -31,12 +31,13 @@ N_tx_ap = N_ap - 1
 # Plotting the topology
 lib.plot_topology(ap_positions, ue_positions, env_radius, target_position=target_position)
 
+
 # %% Generating Communication Channels
 
 comm_K0_dB = 10
 comm_angle_spread_deg = 5
 comm_pl_exponent = 2.5
-comm_shadow_sigma_dB = 4
+comm_shadow_sigma_dB = 1
 comm_spatialCorr_dim = 'none'
 
 H_mat = np.zeros((N_ue, M_t, N_ap), dtype=complex)
@@ -74,7 +75,7 @@ n_subcarrIdx = 20
 k_symIdx = 2
 target_shadow_sigma_dB = 2
 target_K0_dB = 40
-target_angle_spread_deg = 10
+target_angle_spread_deg = 5
 target_spatialCorr_dim = 'azimuth'
 beta_rcs = 1
 
@@ -135,8 +136,8 @@ print(H_mat_target.shape)
 sensing_bf_mode = 'ns_zf'
 print(f'Sensing Beamforming Mode: {sensing_bf_mode}')
 
-P_sensing_linear = np.array([1, 1, 1, 1, 1])
-P_comm_linear = 2 - P_sensing_linear
+P_sensing_linear = np.ones(N_ap) / 2
+P_comm_linear = 1 - P_sensing_linear
 
 C = np.zeros((N_ue, N_ue + 1), dtype=complex)
 C[:, 1:] = np.identity(N_ue, dtype=complex)
@@ -199,6 +200,7 @@ for m in range(N_ap):
 plt.imshow(np.abs(H_W), cmap='gray')
 plt.colorbar()
 plt.title('$\\sum_{m} H_m W_m$ Matrix')
+plt.tight_layout()
 plt.show()
 print('Precoders W_mat Calculated with the size:')
 print('(M_t, N_ue+1, N_ap)')
@@ -206,10 +208,10 @@ print(W_mat.shape)
 
 # %% SINR Based on H_W Matrix
 
-awgn_snr_dB = 25
+awgn_snr_dB = 20
 awgn_snr = 10 ** (awgn_snr_dB / 10)
-P_comm = 1
-P_sensing = 1
+P_comm = 1/2
+P_sensing = 1/2
 awgn_sigma_sq = (P_comm+P_sensing) / awgn_snr
 
 sinr_dB = []

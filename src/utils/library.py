@@ -4,6 +4,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 
 # ----------
@@ -135,6 +136,7 @@ def plot_topology(ap_positions, ue_positions, env_radius, target_position=None, 
     ax.set_ylim(-env_radius - fig_margin, env_radius + fig_margin)
     ax.set_aspect('equal', adjustable='box')
     ax.ticklabel_format(axis='both', style='sci', scilimits=(1, 2))
+    plt.tight_layout()
     plt.show()
 
 
@@ -280,33 +282,21 @@ def generate_channels_singleAP(M_t, N_ue, ap_position, ue_positions, h_ap, h_ue,
     return channels
 
 
-# ----------
-# Simulation Parameters
-# ----------
+def simulation_print_statement(start_time=None, end_time=None, width=40, start=False, end=False):
+    if start:
+        # Print simulation start
+        print("=" * width)
+        print(">> Simulation Started <<".center(width))
+        print("-" * width)
+        print(f"Start Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print("=" * width)
+    if end:
+        # Print simulation end
+        duration = end_time - start_time
+        print("=" * width)
+        print(">> Simulation Completed <<".center(width))
+        print("-" * width)
+        print(f"End Time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Total Duration: {duration:.2f} seconds")
+        print("=" * width)
 
-from dataclasses import dataclass
-
-
-@dataclass
-class SimulationParameters:
-    # Network Parameters
-    N_ap: int = 4  # Number of APs
-    N_ue: int = 4  # Number of UEs
-    M_t: int = 8  # Number of antennas at each AP
-    h_ap: float = 10  # Height of APs (m)
-    h_ue: float = 1.5  # Height of UEs (m)
-    h_target: float = 0.5  # Height of Target (m)
-    env_radius: float = 1000  # Radius of the circular environment (m)
-    ap_radius: float = 650  # Radius of the circle of APs (m)
-    uca_radius: float = 0.2  # Radius of the UCA (m)
-    c: float = 3e8  # Speed of light (m/s)
-    fc: float = 3.5e9  # Carrier frequency (Hz)
-    wavelength: float = c / fc  # Wavelength (m)
-    # Communication Parameters
-    comm_K0_dB: float = 10  # Rician factor at reference distance (dB)
-    # Channel Parameters
-    angle_spread_deg: float = 5  # Angle spread of the UCA (deg)
-    pathloss_exponent: float = 2.5  # Pathloss exponent
-    shadow_sigma_dB: float = 4  # Shadowing standard deviation (dB)
-    spatialCorr_dim: str = 'azimuth'  # Spatial correlation dimension ('azimuth', 'elevation', or 'both')
-    mode: str = 'rician'  # Channel mode ('rician' or 'rayleigh')
