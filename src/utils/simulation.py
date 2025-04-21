@@ -57,12 +57,19 @@ class SimulationOutput:
     sens_only_snr: np.ndarray = field(default_factory=lambda: np.array([]))
     beamforming_matrix: np.ndarray = field(default_factory=lambda: np.array([]))
     PSRs: np.ndarray = field(default_factory=lambda: np.array([]))
+    splitOpt_history: np.ndarray = field(default_factory=lambda: np.array([]))
+
 
 @dataclass
 class SplitOptimizationParams:
     gamma: float = 0.1  # Minimum SINR requirement
     min_rho: float = 0.0  # Minimum PSR
     max_rho: float = 1.0  # Maximum PSR
+    xi: float = 1.0  # penalty parameter
+    Psi: float = 5.0  # multiplier for increasing xi
+    slack_tol: float = 1e-4  # acceptable slack tolerance
+    max_iters: int = 15
+
 
 # ----------
 # Simulation Class
@@ -240,9 +247,8 @@ class WirelessSimulation:
                 W_a[:, -1] = np.squeeze(ns_beam)  # null-space beam using comm ZF beam
             else:
                 raise ValueError("Invalid sensing beamforming mode. Must be one of 'conj', 'ns_svd', or 'ns_zf'.")
-
             if print_log:
-                alignment = np.abs(np.dot(W_a[:, -1].conj().T, target_dir))
+                alignment = np.abs(np.dot(W_a[:, -1].conj().T, target_dir/np.linalg.norm(target_dir)))
                 print(f'Alignment for AP {a}: {alignment:.4f}')
             delta_s = np.linalg.norm(np.dot(d_a.conj().T, W_a[:, -1]))**2
             W_a_comm = H_a_plus @ (weights[a] * C[:, :-1])
@@ -256,27 +262,40 @@ class WirelessSimulation:
             W_hat_mat[:, :, a] = W_a
         return W_hat_mat, alpha_prime_vec, Delta_prime_vec
 
-    def set_splitOpt_params(self, gamma=None, min_rho=None, max_rho=None):
-        if gamma is not None:
-            self.splitOpt_params.gamma = gamma
-        if min_rho is not None:
-            self.splitOpt_params.min_rho = min_rho
-        if max_rho is not None:
-            self.splitOpt_params.max_rho = max_rho
+    def set_splitOpt_params(self, gamma=None, min_rho=None, max_rho=None, xi=None, Psi=None, slack_tol=None, max_iters=None):
+        if gamma is not None:       self.splitOpt_params.gamma = gamma
+        if min_rho is not None:     self.splitOpt_params.min_rho = min_rho
+        if max_rho is not None:     self.splitOpt_params.max_rho = max_rho
+        if xi is not None:          self.splitOpt_params.xi = xi
+        if Psi is not None:         self.splitOpt_params.Psi = Psi
+        if slack_tol is not None:   self.splitOpt_params.slack_tol = slack_tol
+        if max_iters is not None:   self.splitOpt_params.max_iters = max_iters
 
     def find_optimal_PSRs(self, alpha_prime_vec, Delta_prime_vec, print_log=False):
         alpha_prime_vec_t = np.delete(alpha_prime_vec, self.sensingRxAP_index)
         Delta_prime_vec_t = np.delete(Delta_prime_vec, self.sensingRxAP_index)
-        # Variables
-        rho = cp.Variable(self.params.N_ap-1)
-        # Constraint: (sum alpha_i * sqrt(rho_i)) >= sqrt(gamma)
-        comm_constraint = cp.sum(cp.multiply(alpha_prime_vec_t, cp.sqrt(rho))) >= np.sqrt(self.splitOpt_params.gamma)
-        # Objective: maximize sensing utility
-        objective = cp.Maximize(Delta_prime_vec_t @ rho)
-        # Problem definition
-        constraints = [comm_constraint, rho >= self.splitOpt_params.min_rho, rho <= self.splitOpt_params.max_rho]
-        problem = cp.Problem(objective, constraints)
-        problem.solve()
+
+        history = []
+        rho = None
+        problem = None
+        for t in range(self.splitOpt_params.max_iters):
+            # Opt Variables (PSR and slack)
+            rho = cp.Variable(self.params.N_ap - 1)
+            s = cp.Variable(nonneg=True)
+            # Constraint: (sum alpha_i * sqrt(rho_i)) + s >= sqrt(gamma)
+            comm_constraint = cp.sum(cp.multiply(alpha_prime_vec_t, cp.sqrt(rho))) + s >= np.sqrt(
+                self.splitOpt_params.gamma)
+            constraints = [comm_constraint, rho >= self.splitOpt_params.min_rho, rho <= self.splitOpt_params.max_rho]
+            # Objective: max sensing utility - xi * slack
+            objective = cp.Maximize(Delta_prime_vec_t @ rho - self.splitOpt_params.xi * s)
+            problem = cp.Problem(objective, constraints)
+            problem.solve(solver=cp.ECOS)
+            # Log
+            history.append((self.splitOpt_params.xi, s.value, problem.value))
+            # Check if slack is negligible
+            if s.value <= self.splitOpt_params.slack_tol:
+                break
+            self.splitOpt_params.xi += self.splitOpt_params.Psi * (t+1)
         # Output
         if print_log:
             print("Optimal rho:", rho.value)
@@ -289,6 +308,7 @@ class WirelessSimulation:
                     continue
                 self.PSR_vec[a] = rho.value[a - (a > self.sensingRxAP_index)]
         self.outputs.PSRs = self.PSR_vec
+        self.outputs.splitOpt_history = np.array(history)
 
     def set_PSRs(self, PSR_vec):
         if len(PSR_vec) != self.params.N_ap:
@@ -318,7 +338,6 @@ class WirelessSimulation:
             W_a = W_mat[:, :, a]
             H_W += H_a @ W_a
         return H_W
-
 
     def calculate_sinr(self, H_W, print_log=False):
         sinr_dB = []
@@ -354,12 +373,15 @@ class WirelessSimulation:
             print('Sensing SNR (Sensing Beam): {:.2f} dB'.format(snr_sens_dB))
         return snr_dB_vec
 
-    def run_simulation(self, optimizePA=True, print_log=False):
+    def run_simulation(self, optimizePA=True, sim_log=False, print_log=False):
         if self.ap_positions is None or self.ue_positions is None:
             raise ValueError("Topology not generated. Call generate_topology() first.")
         start_time = time.time()
-        if print_log:
+        if print_log or sim_log:
             lib.simulation_print_statement(start_time=start_time, start=True)
+            print('Random Seed:', self.params.seed)
+            print('Optimizing PAs:', optimizePA)
+            print('Running Simulation...')
         H_mat_comm = self.generate_comm_channel(print_log=print_log)
         _, H_T_sens = self.generate_sens_channel(print_log=print_log)
         W_hat_mat, alpha_prime_vec, Delta_prime_vec = self.generate_fixed_precoders(H_mat_comm, print_log=print_log)
@@ -375,7 +397,7 @@ class WirelessSimulation:
         self.outputs.sens_total_snr = snr_dB_vec[0]
         self.outputs.sens_only_snr = snr_dB_vec[1]
         end_time = time.time()
-        if print_log:
+        if print_log or sim_log:
             lib.simulation_print_statement(start_time=start_time, end_time=end_time, end=True)
 
 

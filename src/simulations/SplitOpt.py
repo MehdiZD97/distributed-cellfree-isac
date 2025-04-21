@@ -10,7 +10,7 @@ N = 4
 np.random.seed(1)
 alpha = (np.ones(N) / N) / 2
 delta = np.array([-0.3, -0.22, 0.1, 0.11])  # Example delta values
-gamma = 0.24  # Set a large gamma to test
+gamma = 0.12  # Set a large gamma to test
 sqrt_gamma = np.sqrt(gamma)
 # Variables
 rho = cp.Variable(N)
@@ -36,12 +36,12 @@ N = 4
 np.random.seed(1)
 alpha = (np.ones(N) / N) / 2
 delta = np.array([-0.3, -0.22, 0.1, 0.11])  # Example delta values
-gamma = 0.3  # Set a large gamma to test
+gamma = 0.12  # Set a large gamma to test
 sqrt_gamma = np.sqrt(gamma)
 
 # Adaptive penalty parameters
 mu = 1.0
-tau = 2.0  # multiplier for mu
+tau = 5.0  # multiplier for mu
 eps = 1e-4  # acceptable slack tolerance
 max_iters = 15
 
