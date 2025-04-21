@@ -1,6 +1,7 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from src.utils import library as lib
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__name__))
@@ -10,19 +11,29 @@ else:
     BASE_DIR = BASE_DIR + '/'
 data_dir = 'data/'
 
+SAVE_FIG = False
+
 #%% Loading the data
 
-filename = '2025_04_21_00_16_splitOpt_optPA.npz'
-loaded = np.load(BASE_DIR + data_dir + filename, allow_pickle=True)
-results_dict_optPA = dict(loaded.items())
+hour = 15
+minute = 41
+optPA_extra_min = 0
+# 'fixed' or 'rand'
+targetLoc_type = 'rand'
+sinrSNR_type = '24_30'
 
-filename = '2025_04_20_23_48_splitOpt_fixedPSR0p2.npz'
+filename = f'2025_04_21_{hour}_{minute}_splitOpt_fixedPSR0p2_{targetLoc_type}TargetLoc_sinrSNR_{sinrSNR_type}dB.npz'
 loaded = np.load(BASE_DIR + data_dir + filename, allow_pickle=True)
 results_dict_fixedPSR0p2 = dict(loaded.items())
 
-filename = '2025_04_20_23_55_splitOpt_fixedPSR0p8.npz'
+filename = f'2025_04_21_{hour}_{minute}_splitOpt_fixedPSR0p8_{targetLoc_type}TargetLoc_sinrSNR_{sinrSNR_type}dB.npz'
 loaded = np.load(BASE_DIR + data_dir + filename, allow_pickle=True)
 results_dict_fixedPSR0p8 = dict(loaded.items())
+
+filename = f'2025_04_21_{hour}_{minute+optPA_extra_min}_splitOpt_optPA_{targetLoc_type}TargetLoc_sinrSNR_{sinrSNR_type}dB.npz'
+loaded = np.load(BASE_DIR + data_dir + filename, allow_pickle=True)
+results_dict_optPA = dict(loaded.items())
+
 
 #%% Extracting the data
 
@@ -37,7 +48,6 @@ sens_only_snrs_fixedPSR0p2 = results_dict_fixedPSR0p2['sens_only_snrs']
 comm_sinrs_fixedPSR0p8 = results_dict_fixedPSR0p8['comm_sinrs']
 sens_snrs_fixedPSR0p8 = results_dict_fixedPSR0p8['sens_snrs']
 sens_only_snrs_fixedPSR0p8 = results_dict_fixedPSR0p8['sens_only_snrs']
-
 
 
 
@@ -88,9 +98,8 @@ plt.title('')
 # Reverse legend to match top-to-bottom order of bars
 handles, labels = plt.gca().get_legend_handles_labels()
 plt.legend(handles[::-1], labels[::-1], title='Bar Type', loc='best', fontsize=12)
-
 plt.grid(True, axis='x', linestyle='--', alpha=0.7)
 plt.tight_layout()
-plt.savefig(BASE_DIR + 'figures/' + 'exp1_bar_plot.png', dpi=300, bbox_inches='tight', transparent=False)
+if SAVE_FIG:
+    lib.save_sim_figure(prefix=f'exp1_bar_plot_sinrSNR_{sinrSNR_type}dB.png', save_dir=BASE_DIR+'figures/', add_timestamp=False)
 plt.show()
-

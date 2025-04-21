@@ -367,4 +367,13 @@ def save_sim_results(results_dict, prefix='simulation_results', save_dir='../../
     timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
     filename = f"{save_dir}{timestamp}_{prefix}.npz"
     np.savez(filename, **results_dict)
-    print(f"Saved to {filename}")
+    print(f"\n+ Saved to {filename}\n")
+
+def save_sim_figure(prefix='sim_fig.png', save_dir='./figures/', add_timestamp=True):
+    if add_timestamp:
+        timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
+        filename = f"{save_dir}{timestamp}_{prefix}"
+    else:
+        filename = f"{save_dir}{prefix}"
+    plt.savefig(filename, dpi=300, bbox_inches='tight', transparent=False)
+    print(f"\n+ Figure saved to {filename}\n")
