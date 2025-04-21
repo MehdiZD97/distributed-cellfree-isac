@@ -363,8 +363,8 @@ def plot_PSRs(PSR_vec, title='Power Splitting Ratios (PSRs)', xlabel='AP Index',
     plt.show()
 
 
-def save_sim_outputs(outputs_dict, prefix='simulation_results', save_dir='./outputs/'):
+def save_sim_results(results_dict, prefix='simulation_results', save_dir='../../results/'):
     timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
     filename = f"{save_dir}{timestamp}_{prefix}.npz"
-    np.savez(filename, **outputs_dict)
+    np.savez(filename, **results_dict)
     print(f"Saved to {filename}")
