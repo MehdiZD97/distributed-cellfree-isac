@@ -90,11 +90,12 @@ class WirelessSimulation:
             TxSNR_linear = 10 ** (self.params.TxSNR / 10)
             self.params.P_noise = self.params.P_max / TxSNR_linear
 
-    def generate_topology(self):
-        self.ap_positions = lib.generate_AP_positions(self.params.N_ap, self.params.ap_radius)
+    def generate_topology(self, locate_target=True):
+        if self.ap_positions is None:
+            self.ap_positions = lib.generate_AP_positions(self.params.N_ap, self.params.ap_radius)
         self.ue_positions = lib.generate_UE_positions(self.params.N_ue, self.params.env_radius, random_state=self.params.seed)
-        self.target_position = lib.generate_target_positions(self.params.env_radius, N_target=self.params.N_target,
-                                                             random_state=self.params.seed)
+        if locate_target or self.target_position is None:
+            self.target_position = lib.generate_target_positions(self.params.env_radius, N_target=self.params.N_target, random_state=self.params.seed)
         self.sensingRxAP_index = lib.find_sensingRxAP(self.ap_positions, self.target_position)
 
     def set_position(self, obj_typy=None, obj_idx=None, coords=None):
@@ -307,13 +308,14 @@ class WirelessSimulation:
                 if a == self.sensingRxAP_index:
                     continue
                 self.PSR_vec[a] = rho.value[a - (a > self.sensingRxAP_index)]
+        self.PSR_vec = np.clip(self.PSR_vec, self.splitOpt_params.min_rho, self.splitOpt_params.max_rho)
         self.outputs.PSRs = self.PSR_vec
         self.outputs.splitOpt_history = np.array(history)
 
     def set_PSRs(self, PSR_vec):
         if len(PSR_vec) != self.params.N_ap:
             raise ValueError("PSR vector length must match the number of APs.")
-        self.PSR_vec = PSR_vec
+        self.PSR_vec = np.clip(PSR_vec, self.splitOpt_params.min_rho, self.splitOpt_params.max_rho)
         self.outputs.PSRs = self.PSR_vec
 
     def scale_precoders(self, W_hat_mat):

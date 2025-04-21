@@ -5,6 +5,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+from datetime import datetime
 
 
 # ----------
@@ -300,3 +301,70 @@ def simulation_print_statement(start_time=None, end_time=None, width=40, start=F
         print(f"Total Duration: {duration:.2f} seconds")
         print("=" * width)
 
+def splitOpt_sinr2gamm(TxSNR, sinr_const_dB):
+    """
+    Converts splitOpt SINR constraint to gamma value.
+
+    Parameters:
+        TxSNR (float): Transmit SNR in dB (P_max / P_noise).
+        sinr_const_dB (float): SINR constraint in dB.
+
+    Returns:
+        float: Gamma value.
+    """
+    gamma = 10 ** ((sinr_const_dB - TxSNR) / 10)
+    return gamma
+
+def plot_splitOpt_history(history, title='SplitOpt History', xlabel='Iteration', ylabel='Objective Value'):
+    """
+    Plots the history of the SplitOpt optimization process.
+
+    Parameters:
+        history (ndarray): An array of tuples containing (mu, slack, objective_value).
+        title (str): Title of the plot.
+        xlabel (str): Label for the x-axis.
+        ylabel (str): Label for the y-axis.
+    """
+    xi_values = [entry[0] for entry in history]
+    slack_values = [entry[1] for entry in history]
+    objective_values = [entry[2] for entry in history]
+
+    plt.figure(figsize=(6, 4))
+    plt.plot(xi_values, label='Xi', marker='o')
+    plt.plot(slack_values, label='Slack', marker='x')
+    plt.plot(objective_values, label='Objective Value', marker='s')
+    plt.xticks(np.arange(len(xi_values)))
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.legend()
+    plt.grid(alpha=0.5)
+    plt.tight_layout()
+    plt.show()
+
+def plot_PSRs(PSR_vec, title='Power Splitting Ratios (PSRs)', xlabel='AP Index', ylabel='PSR Value'):
+    """
+    Plots the PSR values for each AP.
+
+    Parameters:
+        PSR_vec (ndarray): Array of PSR values for each AP.
+        title (str): Title of the plot.
+        xlabel (str): Label for the x-axis.
+        ylabel (str): Label for the y-axis.
+    """
+    plt.figure(figsize=(6, 4))
+    plt.bar(np.arange(len(PSR_vec)), PSR_vec)
+    plt.xticks(np.arange(len(PSR_vec)))
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.grid(alpha=0.5)
+    plt.tight_layout()
+    plt.show()
+
+
+def save_sim_outputs(outputs_dict, prefix='simulation_results', save_dir='./outputs/'):
+    timestamp = datetime.now().strftime('%Y_%m_%d_%H_%M')
+    filename = f"{save_dir}{timestamp}_{prefix}.npz"
+    np.savez(filename, **outputs_dict)
+    print(f"Saved to {filename}")
