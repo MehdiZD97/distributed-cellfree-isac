@@ -19,7 +19,7 @@ print("-" * width)
 
 # Simulation parameters
 np.random.seed(2)
-save_results = True
+SAVE_RESULTS = False
 exp_folder = 'exp1/data/'
 num_random_topologies = 1000
 sim_seeds = np.random.choice(10000, num_random_topologies, replace=False)
@@ -54,7 +54,7 @@ for psr_val_idx in range(len(fixed_PSR_vec)):
             sim.set_splitOpt_params(gamma=splitOpt_gamma, min_rho=splitOpt_min_rho, max_rho=splitOpt_max_rho, xi=1.0, Psi=2, max_iters=10)
         else:
             sim.set_PSRs(np.ones(params.N_ap) * fixed_PSR)
-        sim.run_simulation(optimizePA=optimizePA, sim_log=False, print_log=False)
+        sim.run_simulation(optimizePA=optimizePA, sim_log=False, print_log=True)
         comm_sinrs[randTopology_idx, :] = sim.outputs.comm_user_sinr
         sens_snrs[randTopology_idx] = sim.outputs.sens_total_snr
         sens_only_snrs[randTopology_idx] = sim.outputs.sens_only_snr
@@ -81,7 +81,7 @@ for psr_val_idx in range(len(fixed_PSR_vec)):
         psr_val = int(fixed_PSR * 10)
         extra_prefix = f'fixedPSR0p{psr_val}_randTargetLoc' if locate_target else f'fixedPSR0p{psr_val}_fixedTargetLoc'
     # Save results
-    if save_results:
+    if SAVE_RESULTS:
         lib.save_sim_results(results_dict, prefix=f'splitOpt_{extra_prefix}_sinrSNR_{splitOpt_sinr_dB}_{params.TxSNR}dB', save_dir='../../results/' + exp_folder)
 
 print("-" * width)

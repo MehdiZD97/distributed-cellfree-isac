@@ -45,7 +45,7 @@ class SimulationParameters:
     sens_spatialCorr_dim: str = 'azimuth'  # Spatial correlation dimension ('azimuth', 'elevation', 'none', or 'both')
     sens_channel_mode: str = 'rician'  # Channel mode ('rician' or 'rayleigh')
     sensing_bf_mode = 'ns_zf'  # Beamforming mode for sensing ('conj': conjugate, 'ns_svd': null-space based on SVD, 'ns_zf': null-space based on ZF beam)
-    rcs_variance: np.ndarray = field(default_factory=lambda: np.array([]))
+    rcs_variance: np.ndarray = field(default_factory=lambda: np.array([1.0]))
     seed: int = None  # Random seed for reproducibility
 
 
@@ -58,6 +58,8 @@ class SimulationOutput:
     beamforming_matrix: np.ndarray = field(default_factory=lambda: np.array([]))
     PSRs: np.ndarray = field(default_factory=lambda: np.array([]))
     splitOpt_history: np.ndarray = field(default_factory=lambda: np.array([]))
+    jointOpt_history: np.ndarray = field(default_factory=lambda: np.array([]))
+    admm_status: str = None
 
 
 @dataclass
@@ -71,6 +73,20 @@ class SplitOptimizationParams:
     max_iters: int = 15
 
 
+@dataclass
+class JointOptimizationParams:
+    lambda_: float = 0.7  # objective trade-off weight
+    rho: float = 0.5  # ADMM penalty parameter
+    eta_share: np.ndarray = field(default_factory=lambda: np.array([]))  # per-AP SINR share
+    xi_slack: float = 1e1 / 2   # slack penalty parameter
+    sca_iters: int = 5  # number of iterations for SCA
+    admm_iters: int = 35  # number of iterations for ADMM
+    primal_thresh: float = 1e-3  # primal convergence threshold
+    gamma_a_init: np.ndarray = field(default_factory=lambda: np.array([1e-3]))  # initial per-AP gamma values
+    v_dual_init: np.ndarray = field(default_factory=lambda: np.array([0.0]))  # initial dual variables
+
+
+
 # ----------
 # Simulation Class
 # ----------
@@ -78,17 +94,25 @@ class SplitOptimizationParams:
 class WirelessSimulation:
     def __init__(self, params: SimulationParameters):
         self.params = params
-        self.outputs = SimulationOutput()
+        if self.params.P_noise is None:
+            TxSNR_linear = 10 ** (self.params.TxSNR / 10)
+            self.params.P_noise = self.params.P_max / TxSNR_linear
+        self.params.rcs_variance = np.resize(self.params.rcs_variance, self.params.N_ap)
         self.ap_positions = None
         self.ue_positions = None
         self.target_position = None
         self.sensingRxAP_index = None
         self.PSR_vec = np.ones(self.params.N_ap)/2
+        self.outputs = SimulationOutput()
         self.outputs.PSRs = self.PSR_vec
         self.splitOpt_params = SplitOptimizationParams()
-        if self.params.P_noise is None:
-            TxSNR_linear = 10 ** (self.params.TxSNR / 10)
-            self.params.P_noise = self.params.P_max / TxSNR_linear
+        self.jointOpt_params = JointOptimizationParams()
+        if np.size(self.jointOpt_params.eta_share) == 0:
+            self.jointOpt_params.eta_share = np.ones(self.params.N_ap) / self.params.N_ap
+        else:
+            self.jointOpt_params.eta_share = np.resize(self.jointOpt_params.eta_share, self.params.N_ap)
+        self.jointOpt_params.gamma_a_init = np.resize(self.jointOpt_params.gamma_a_init, self.params.N_ap)
+        self.jointOpt_params.v_dual_init = np.resize(self.jointOpt_params.v_dual_init, self.params.N_ap)
 
     def generate_topology(self, locate_target=True):
         if self.ap_positions is None:
@@ -331,6 +355,115 @@ class WirelessSimulation:
             W_mat[:, :, a] = W_a
         return W_mat
 
+    def set_jointOpt_params(self, lambda_=None, rho=None, eta_share=None, xi_slack=None, sca_iters=None, admm_iters=None,
+                            primal_thresh=None, gamma_a_init=None, v_dual_init=None):
+        if lambda_ is not None:         self.jointOpt_params.lambda_ = lambda_
+        if rho is not None:             self.jointOpt_params.rho = rho
+        if eta_share is not None:       self.jointOpt_params.eta_share = np.resize(eta_share, self.params.N_ap)
+        if xi_slack is not None:        self.jointOpt_params.xi_slack = xi_slack
+        if sca_iters is not None:       self.jointOpt_params.sca_iters = sca_iters
+        if admm_iters is not None:      self.jointOpt_params.admm_iters = admm_iters
+        if primal_thresh is not None:   self.jointOpt_params.primal_thresh = primal_thresh
+        if gamma_a_init is not None:    self.jointOpt_params.gamma_a_init = np.resize(gamma_a_init, self.params.N_ap)
+        if v_dual_init is not None:     self.jointOpt_params.v_dual_init = np.resize(v_dual_init, self.params.N_ap)
+
+    def jointOpt_ADMM(self, H_mat_comm, H_T_sens, W_mat, print_log=False):
+        # Optimization parameters
+        P_noise = self.params.P_noise
+        lambda_ = self.jointOpt_params.lambda_
+        rho = self.jointOpt_params.rho
+        eta_share = self.jointOpt_params.eta_share
+        xi_slack = self.jointOpt_params.xi_slack
+        sca_iters = self.jointOpt_params.sca_iters
+        admm_iters = self.jointOpt_params.admm_iters
+        primal_thresh = self.jointOpt_params.primal_thresh
+
+        # ==== Initializing H, W, and steering vectors ====
+        H_comm = H_mat_comm
+        A_target = H_T_sens
+        W = W_mat
+        # ==== Initializing interferences I ====
+        I_users = np.zeros(self.params.N_ue)
+        H_W_admm = self.calc_product_H_W(H_comm, W)
+        for u in range(self.params.N_ue):
+            I_users[u] = (np.linalg.norm(H_W_admm[u, :]) ** 2) - (np.abs(H_W_admm[u, u]) ** 2)
+        # ==== Initializing gamma and dual variable ====
+        gamma_a = self.jointOpt_params.gamma_a_init
+        v_dual = self.jointOpt_params.v_dual_init
+        gamma = np.mean(gamma_a)
+
+        admm_history = []
+        self.outputs.admm_status = 'MaxIterations'
+        # ==== ADMM loop ====
+        for it in range(admm_iters):
+            # ==== Local updates with inner SCA loop ====
+            for a in range(self.params.N_ap):
+                for sca_t in range(sca_iters):
+                    # Linearization parameters of objective (obj) and per-user SINR constraint (con)
+                    g_obj_a = A_target[:, a].conj().T @ W[:, :, a]
+                    g_con_a = np.zeros(self.params.N_ue, dtype=complex)  # only for one AP is available
+                    for u in range(self.params.N_ue):
+                        h_au = H_comm[u, :, a]
+                        w_au = W[:, u, a]
+                        g_con_a[u] = h_au.T @ w_au
+
+                    # CVXPY variables
+                    W_a = cp.Variable((self.params.M_t, self.params.N_ue + 1), complex=True)
+                    gamma_a_var = cp.Variable()
+                    s_users = cp.Variable(self.params.N_ue, nonneg=True)  # slack variable
+
+                    # Linearized sensing utility
+                    u_sens_lin = 2 * cp.real(g_obj_a @ (W_a.conj().T @ A_target[:, a])) - np.linalg.norm(g_obj_a) ** 2
+
+                    # Constraints
+                    cons = [cp.norm(W_a, 'fro') ** 2 <= self.params.P_max]
+                    for u in range(self.params.N_ue):
+                        sinr_lin = 2 * cp.real(g_con_a[u].conj() * H_comm[u, :, a].T @ W_a[:, u]) - np.linalg.norm(
+                            g_con_a[u]) ** 2
+                        I_u = I_users[u]
+                        cons.append(sinr_lin + s_users[u] >= eta_share[a] * gamma_a_var * (
+                                    I_u + np.sqrt(P_noise) ** 2))  # modify based on Minkowski's inequality
+
+                    # Augmented Lagrangian term
+                    aug = lambda_ * gamma_a_var + (1 - lambda_) * u_sens_lin - (rho / 2) * cp.square(
+                        gamma_a_var - gamma + v_dual[a])
+
+                    # Objective
+                    obj = cp.Maximize(aug - xi_slack * cp.sum(s_users))
+                    prob = cp.Problem(obj, cons)
+                    prob.solve(solver=cp.ECOS)
+
+                    # Update W and gamma
+                    W[:, :, a] = W_a.value
+                    gamma_a[a] = gamma_a_var.value
+
+                    # Update interference
+                    H_W_admm = self.calc_product_H_W(H_comm, W)
+                    for u in range(self.params.N_ue):
+                        I_users[u] = (np.linalg.norm(H_W_admm[u, :]) ** 2) - (np.abs(H_W_admm[u, u]) ** 2)
+
+            # ==== Global consensus update ====
+            gamma = np.mean(gamma_a + v_dual)
+            primal_res = np.max(np.abs(gamma_a - gamma))
+            if print_log: print(f'ADMM iter: {it} gamma: {gamma:.4f} primal res: {primal_res:.4f}')
+            if gamma < 0:
+                warnings.warn("--- Gamma is negative, stopping ADMM! ---")
+                break
+
+            # ==== Dual variable update ====
+            v_dual += gamma_a - gamma
+
+            admm_history.append((gamma, primal_res))
+            # ==== Stopping criteria ====
+            if primal_res < primal_thresh:
+                if print_log: print('==**== ADMM converged ==**==')
+                self.outputs.admm_status = 'Converged'
+                break
+        # ==== Final output ====
+        W_star = W
+        self.outputs.jointOpt_history = np.array(admm_history)
+        return W_star
+
     def calc_product_H_W(self, H_mat_comm, W_mat):
         H_W = np.zeros((self.params.N_ue, self.params.N_ue + 1), dtype=complex)
         for a in range(self.params.N_ap):
@@ -365,9 +498,9 @@ class WirelessSimulation:
             P_sds += self.params.rcs_variance[a] * np.linalg.norm(h_T.conj().T @ W_a) ** 2
             P_sds_sens += self.params.rcs_variance[a] * np.linalg.norm(h_T.conj().T @ W_a[:, -1]) ** 2
 
-        snr = P_sds / self.params.P_noise
+        snr = (P_sds / self.params.P_noise) + 1e-10
         snr_dB = 10 * np.log10(snr)
-        snr_sens = P_sds_sens / self.params.P_noise
+        snr_sens = (P_sds_sens / self.params.P_noise) + 1e-10
         snr_sens_dB = 10 * np.log10(snr_sens)
         snr_dB_vec = np.array([snr_dB, snr_sens_dB])
         if print_log:
