@@ -14,7 +14,7 @@ N_ap = 11
 N_ue = 6
 P_max = 1.0
 TxSNR = 20
-sim_seed = 456
+sim_seed = 7658
 
 params = SimulationParameters(N_ap=N_ap, N_ue=N_ue, M_t=M_t, TxSNR=TxSNR,
                               comm_K0_dB=10, comm_shadow_sigma_dB=10,
@@ -34,13 +34,13 @@ W_mat = sim.scale_precoders(W_hat_mat)
 # JointOpt with ADMM
 
 # ==== Optimization parameters ====
-lambda_ = 0.98   # objective trade-off weight
-rho = 0.5   # ADMM penalty parameter
+lambda_ = 0.6   # objective trade-off weight
+rho = 0.3   # ADMM penalty parameter
 eta_share = 1 / N_ap  # per-AP SINR share
 xi_slack = 1e1 / 5
-sca_iters = 5
+sca_iters = 7
 admm_iters = 25
-primal_thresh = 5*1e-4
+primal_thresh = 1e-3
 gamma_a_init = 1e-3
 v_dual_init = 0.0
 

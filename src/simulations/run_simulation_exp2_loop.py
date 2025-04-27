@@ -16,9 +16,9 @@ print("=" * width)
 # ==== Loop parameters ====
 SAVE_RESULTS = True
 exp_folder = 'exp2/data/'
-N_ue_values = [1, 2, 3, 4, 5, 6]
+N_ue_values = [4, 5, 6]
 num_random_topologies = 50
-lambda_values = [0.3, 0.6, 0.9]
+lambda_values = [0.6, 0.9]
 rho_values = [0.2, 0.5, 0.8]
 num_solutions = 2
 
@@ -26,16 +26,16 @@ np.random.seed(2)
 sim_seeds = np.random.choice(10000, num_random_topologies, replace=False)
 
 # ==== Simulation parameters ====
-M_t = 10
-N_ap = 4
+M_t = 3
+N_ap = 11
 P_max = 1.0
 TxSNR = 20
 # ==== Optimization parameters ====
 eta_share = 1 / N_ap  # per-AP SINR share
 xi_slack = 1e1 / 5
-sca_iters = 10
+sca_iters = 7
 admm_iters = 25
-primal_thresh = 5*1e-4
+primal_thresh = 1*1e-3
 gamma_a_init = 1e-3
 v_dual_init = 0.0
 order_hint = 'UEs-Topologies-Lambda-Rho-Solutions'
@@ -103,7 +103,7 @@ for num_ue_it in range(len(N_ue_values)):
     }
     # Save results
     if SAVE_RESULTS:
-        prefix = f'jointOpt_Nue{N_ue}_{num_random_topologies}Topos_TxSNR{TxSNR}dB'
+        prefix = f'jointOpt_Nue{N_ue}_{num_random_topologies}Topos_TxSNR{TxSNR}dB_{N_ap}APs_{M_t}ants'
         lib.save_sim_results(results_dict, prefix=prefix, save_dir='../../results/' + exp_folder)
     end_time_ue = time.time()
     print(f"==> Execution time for N_ue {N_ue}: {end_time_ue - start_time_ue:.2f} seconds <==")
