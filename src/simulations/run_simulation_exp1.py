@@ -2,30 +2,30 @@
 import numpy as np
 from src.utils import library as lib
 from src.utils.simulation import SimulationParameters, WirelessSimulation
+import time
 
-params = SimulationParameters(N_ap=4, N_ue=8, M_t=10, TxSNR=30,
-                              comm_K0_dB=10, comm_shadow_sigma_dB=10,
-                              sens_K0_dB=20, sens_shadow_sigma_dB=15, sens_angle_spread_deg=5,
-                              sens_spatialCorr_dim='azimuth',
-                              rcs_variance=np.ones(4) / 2, seed=None)
-sim = WirelessSimulation(params)
+start_time = time.time()
 
-width = 30
+width = 40
 print("-" * width)
 print(">> Simulation Started <<".center(width))
 print("-" * width)
 
-
+params = SimulationParameters(N_ap=4, N_ue=6, M_t=10, TxSNR=20,
+                              comm_K0_dB=10, comm_shadow_sigma_dB=10,
+                              sens_K0_dB=30, sens_shadow_sigma_dB=15, sens_angle_spread_deg=5,
+                              sens_spatialCorr_dim='azimuth', rcs_variance=0.5, seed=None)
+sim = WirelessSimulation(params)
 
 # Simulation parameters
 np.random.seed(2)
-SAVE_RESULTS = False
+SAVE_RESULTS = True
 exp_folder = 'exp1/data/'
 num_random_topologies = 1000
 sim_seeds = np.random.choice(10000, num_random_topologies, replace=False)
-locate_target = True    # False is target is fixed
+locate_target = True    # False if target is fixed
 target_coords = [250, 0]  # target coordinates for fixed target
-splitOpt_sinr_dB = 24  # Constraint for comm SINR
+splitOpt_sinr_dB = 15  # Constraint for comm SINR
 splitOpt_gamma = lib.splitOpt_sinr2gamm(params.TxSNR, splitOpt_sinr_dB)
 splitOpt_min_rho = 0.0
 splitOpt_max_rho = 1.0
@@ -51,10 +51,10 @@ for psr_val_idx in range(len(fixed_PSR_vec)):
             sim.set_position(obj_typy='target', obj_idx=0, coords=target_coords)
         # sim.plot_topology()
         if optimizePA:
-            sim.set_splitOpt_params(gamma=splitOpt_gamma, min_rho=splitOpt_min_rho, max_rho=splitOpt_max_rho, xi=1.0, Psi=2, max_iters=10)
+            sim.set_splitOpt_params(gamma=splitOpt_gamma, min_rho=splitOpt_min_rho, max_rho=splitOpt_max_rho, xi=1.0, Psi=2, max_iters=12)
         else:
             sim.set_PSRs(np.ones(params.N_ap) * fixed_PSR)
-        sim.run_simulation(optimizePA=optimizePA, sim_log=False, print_log=True)
+        sim.run_simulation(optimizePA=optimizePA, sim_log=False, print_log=False)
         comm_sinrs[randTopology_idx, :] = sim.outputs.comm_user_sinr
         sens_snrs[randTopology_idx] = sim.outputs.sens_total_snr
         sens_only_snrs[randTopology_idx] = sim.outputs.sens_only_snr
@@ -84,7 +84,9 @@ for psr_val_idx in range(len(fixed_PSR_vec)):
     if SAVE_RESULTS:
         lib.save_sim_results(results_dict, prefix=f'splitOpt_{extra_prefix}_sinrSNR_{splitOpt_sinr_dB}_{params.TxSNR}dB', save_dir='../../results/' + exp_folder)
 
+end_time = time.time()
 print("-" * width)
 print(">> Simulation finished <<".center(width))
+print(f"Execution time: {end_time - start_time:.2f} seconds")
 print("-" * width)
 
