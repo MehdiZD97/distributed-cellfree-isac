@@ -535,4 +535,28 @@ class WirelessSimulation:
         if print_log or sim_log:
             lib.simulation_print_statement(start_time=start_time, end_time=end_time, end=True)
 
+    def run_simulation_jointOpt(self, sim_log=False, print_log=False):
+        if self.ap_positions is None or self.ue_positions is None:
+            raise ValueError("Topology not generated. Call generate_topology() first.")
+        start_time = time.time()
+        if print_log or sim_log:
+            lib.simulation_print_statement(start_time=start_time, start=True)
+            print('Random Seed:', self.params.seed)
+            print('Running Simulation...')
+        H_mat_comm = self.generate_comm_channel(print_log=print_log)
+        _, H_T_sens = self.generate_sens_channel(print_log=print_log)
+        W_hat_mat, _, _ = self.generate_fixed_precoders(H_mat_comm, print_log=print_log)
+        W_mat = self.scale_precoders(W_hat_mat)
+        W_star = self.jointOpt_ADMM(H_mat_comm, H_T_sens, W_mat, print_log=print_log)
+        H_W = self.calc_product_H_W(H_mat_comm, W_star)
+        sinr_dB = self.calculate_sinr(H_W, print_log=print_log)
+        self.outputs.comm_user_sinr = sinr_dB
+        self.outputs.comm_avg_sinr = np.mean(sinr_dB)
+        snr_dB_vec = self.calculate_sensing_snr(H_T_sens, W_mat, print_log=print_log)
+        self.outputs.sens_total_snr = snr_dB_vec[0]
+        self.outputs.sens_only_snr = snr_dB_vec[1]
+        end_time = time.time()
+        if print_log or sim_log:
+            lib.simulation_print_statement(start_time=start_time, end_time=end_time, end=True)
+
 

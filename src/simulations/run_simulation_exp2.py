@@ -51,10 +51,10 @@ sim.set_jointOpt_params(lambda_=lambda_, rho=rho, eta_share=eta_share,
                         v_dual_init=v_dual_init)
 W_star = sim.jointOpt_ADMM(H_mat_comm, H_T_sens, W_mat, print_log=True)
 H_W = sim.calc_product_H_W(H_mat_comm, W_star)
-sirn_dB = sim.calculate_sinr(H_W)
+sinr_dB = sim.calculate_sinr(H_W)
 snr_dB_vec = sim.calculate_sensing_snr(H_T_sens, W_mat)
 
-print('Comm SINRs:', sirn_dB)
+print('Comm SINRs:', sinr_dB)
 print('Sensing SNR:', snr_dB_vec[0])
 
 end = time.time()

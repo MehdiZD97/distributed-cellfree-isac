@@ -2,7 +2,7 @@
 
 This repository contains Python simulations and implementations for the algorithms proposed in our research paper:
 
-**Coordinated Decentralized Resource Optimization for Cell-Free Integrated Sensing and Communication (ISAC) Systems**.
+**Coordinated Decentralized Resource Optimization for Cell-Free ISAC Systems**.
 
 ## Introduction
 
@@ -69,7 +69,7 @@ sim.plot_topology()
 
 [//]: # (![System Model]&#40;results/exp1/figures/exp1_topology.png&#41;)
 <p align="center">
-  <img src="results/exp1/figures/exp1_topology.png" alt="Topology" width="300"/>
+  <img src="results/exp1/figures/exp1_topology.png" alt="Topology" width="450"/>
 </p>
 
 #### SplitOpt Simulation
@@ -80,20 +80,18 @@ sim.run_simulation(optimizePA=True)
 
 #### JointOpt Simulation
 ```bash
-H_mat_comm = sim.generate_comm_channel()
-_, H_T_sens = sim.generate_sens_channel()
-W_hat_mat, _, _ = sim.generate_fixed_precoders(H_mat_comm)
-W_mat = sim.scale_precoders(W_hat_mat)
 sim.set_jointOpt_params(lambda_, rho, eta_share, xi_slack, sca_iters, admm_iters)
-W_star = sim.jointOpt_ADMM(H_mat_comm, H_T_sens, W_mat)
-H_W = sim.calc_product_H_W(H_mat_comm, W_star)
-sirn_dB = sim.calculate_sinr(H_W)
-snr_dB = sim.calculate_sensing_snr(H_T_sens, W_mat)
+sim.run_simulation_jointOpt()
 ```
 
-[//]: # (**Parameters:**)
+**Output Parameters:**
 
-[//]: # (- `--num_aps`: Number of Access Points in the simulation.)
+- `sim.outputs.comm_user_sinr`: SINR far all users in dB.
+- `sim.outputs.comm_avg_sinr`: Average SINR in dB.
+- `sim.outputs.sens_total_snr`: Total sensing SNR in dB.
+- `sim.outputs.sens_only_snr`: Sensing beam SNR in dB.
+- `sim.outputs.splitOpt_history`: History of SplitOpt algorithm.
+- `sim.outputs.jointOpt_history`: History of JointOpt algorithm.
 
 ## Citation
 
