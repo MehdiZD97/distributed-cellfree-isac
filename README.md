@@ -86,7 +86,7 @@ sim.run_simulation_jointOpt()
 
 **Output Parameters:**
 
-- `sim.outputs.comm_user_sinr`: SINR far all users in dB.
+- `sim.outputs.comm_user_sinr`: SINR for all users in dB.
 - `sim.outputs.comm_avg_sinr`: Average SINR in dB.
 - `sim.outputs.sens_total_snr`: Total sensing SNR in dB.
 - `sim.outputs.sens_only_snr`: Sensing beam SNR in dB.
