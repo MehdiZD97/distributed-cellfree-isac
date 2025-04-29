@@ -100,7 +100,7 @@ If you use this repository in your research, please cite:
 ### Paper
 ```bibtex
 @inproceedings{zafari2025paper,
-  author = {Mehdi Zafari},
+  author = {Mehdi Zafari and Rang Liu and A. Lee Swindlehurst},
   title = {Coordinated Decentralized Resource Optimization for Cell-Free ISAC Systems},
   booktitle = {IEEE Asilomar Conference on Signals, Systems, and Computers},
   year = {2025},
