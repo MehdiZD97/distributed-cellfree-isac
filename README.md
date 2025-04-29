@@ -1,6 +1,6 @@
 # Distributed Cell-Free ISAC: Coordinated Decentralized Resource Optimization
 
-This repository contains Python simulations and implementations for the algorithms proposed in our research paper:
+This repository contains the Python-based simulation framework for the algorithms proposed in our research paper:
 
 **Coordinated Decentralized Resource Optimization for Cell-Free ISAC Systems**.
 
