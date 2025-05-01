@@ -84,6 +84,8 @@ class JointOptimizationParams:
     primal_thresh: float = 1e-3  # primal convergence threshold
     gamma_a_init: np.ndarray = field(default_factory=lambda: np.array([1e-3]))  # initial per-AP gamma values
     v_dual_init: np.ndarray = field(default_factory=lambda: np.array([0.0]))  # initial dual variables
+    cent_iters: int = 25    # number of iterations for centralized solution
+    cent_conv_thresh: float = 1e-4  # convergence threshold for centralized solution
 
 
 
@@ -356,16 +358,18 @@ class WirelessSimulation:
         return W_mat
 
     def set_jointOpt_params(self, lambda_=None, rho=None, eta_share=None, xi_slack=None, sca_iters=None, admm_iters=None,
-                            primal_thresh=None, gamma_a_init=None, v_dual_init=None):
-        if lambda_ is not None:         self.jointOpt_params.lambda_ = lambda_
-        if rho is not None:             self.jointOpt_params.rho = rho
-        if eta_share is not None:       self.jointOpt_params.eta_share = np.resize(eta_share, self.params.N_ap)
-        if xi_slack is not None:        self.jointOpt_params.xi_slack = xi_slack
-        if sca_iters is not None:       self.jointOpt_params.sca_iters = sca_iters
-        if admm_iters is not None:      self.jointOpt_params.admm_iters = admm_iters
-        if primal_thresh is not None:   self.jointOpt_params.primal_thresh = primal_thresh
-        if gamma_a_init is not None:    self.jointOpt_params.gamma_a_init = np.resize(gamma_a_init, self.params.N_ap)
-        if v_dual_init is not None:     self.jointOpt_params.v_dual_init = np.resize(v_dual_init, self.params.N_ap)
+                            primal_thresh=None, gamma_a_init=None, v_dual_init=None, cent_iters=None, cent_conv_thresh=None):
+        if lambda_ is not None:             self.jointOpt_params.lambda_ = lambda_
+        if rho is not None:                 self.jointOpt_params.rho = rho
+        if eta_share is not None:           self.jointOpt_params.eta_share = np.resize(eta_share, self.params.N_ap)
+        if xi_slack is not None:            self.jointOpt_params.xi_slack = xi_slack
+        if sca_iters is not None:           self.jointOpt_params.sca_iters = sca_iters
+        if admm_iters is not None:          self.jointOpt_params.admm_iters = admm_iters
+        if primal_thresh is not None:       self.jointOpt_params.primal_thresh = primal_thresh
+        if gamma_a_init is not None:        self.jointOpt_params.gamma_a_init = np.resize(gamma_a_init, self.params.N_ap)
+        if v_dual_init is not None:         self.jointOpt_params.v_dual_init = np.resize(v_dual_init, self.params.N_ap)
+        if cent_iters is not None:          self.jointOpt_params.cent_iters = cent_iters
+        if cent_conv_thresh is not None:    self.jointOpt_params.cent_conv_thresh = cent_conv_thresh
 
     def jointOpt_ADMM(self, H_mat_comm, H_T_sens, W_mat, print_log=False):
         # Optimization parameters
@@ -463,6 +467,101 @@ class WirelessSimulation:
         W_star = W
         self.outputs.jointOpt_history = np.array(admm_history)
         return W_star
+
+    def jointOpt_centralized(self, H_mat_comm, H_T_sens, W_mat, print_log=False):
+        # Optimization parameters
+        P_noise = self.params.P_noise
+        lambda_ = self.jointOpt_params.lambda_
+        xi_slack = self.jointOpt_params.xi_slack
+        sca_iters = self.jointOpt_params.sca_iters
+        cent_iters = self.jointOpt_params.cent_iters
+        conv_thresh = self.jointOpt_params.cent_conv_thresh
+
+        # ==== Initializing H, W, and steering vectors ====
+        # H_comm shape: (N_ue, M_t, N_ap)
+        H_comm = H_mat_comm
+        A_target = H_T_sens
+        # W shape: (M_t, N_ue+1, N_ap)
+        W = W_mat
+
+        # ==== Initializing interferences I ====
+        I_users = np.zeros(self.params.N_ue)
+        H_W_admm = self.calc_product_H_W(H_comm, W)
+        for u in range(self.params.N_ue):
+            I_users[u] = (np.linalg.norm(H_W_admm[u, :]) ** 2) - (np.abs(H_W_admm[u, u]) ** 2)
+
+        gamma_prev = 1e-3
+        gamma_new = 1e3
+
+        # ==== Opt loop ====
+        for it in range(cent_iters):
+            # ==== Inner SCA loop ====
+            for sca_t in range(sca_iters):
+                # CVXPY variables
+                W_var = cp.Variable(((self.params.N_ue + 1), self.params.M_t * self.params.N_ap), complex=True)
+                gamma_var = cp.Variable()
+                s_users = cp.Variable(self.params.N_ue, nonneg=True)  # slack variable
+
+                # Linearization of sensing utility
+                u_sens_lin = []
+                for a in range(self.params.N_ap):
+                    g_obj_a = A_target[:, a].conj().T @ W[:, :, a]
+                    # Linearized sensing utility
+                    W_a = W_var[:, a * self.params.M_t:(a + 1) * self.params.M_t].T
+                    u_sens_lin.append(
+                        2 * cp.real(g_obj_a @ (W_a.conj().T @ A_target[:, a])) - np.linalg.norm(g_obj_a) ** 2)
+                u_sens_total = cp.sum(u_sens_lin)
+
+                # Linearization of SINR numerator
+                g_con_list = []
+                for u in range(self.params.N_ue):
+                    h_u = np.reshape(H_comm[u, :, :], (self.params.M_t * self.params.N_ap, 1), order='F')
+                    w_u_t = np.reshape(W[:, u, :], (self.params.M_t * self.params.N_ap, 1), order='F')
+                    w_u_var = W_var[u, :]
+                    hw_t = h_u.T @ w_u_t
+                    g_con_list.append(2 * cp.real(hw_t.conj() * h_u.T @ w_u_var) - np.linalg.norm(hw_t) ** 2)
+                g_con = cp.vstack(g_con_list)
+
+                # Constraints
+                cons = []
+                for u in range(self.params.N_ue):
+                    I_u = I_users[u]
+                    cons.append(g_con[u] + s_users[u] >= (
+                                gamma_var * (I_u + P_noise)))  # modify based on Minkowski's inequality
+                # Power constraint
+                for a in range(self.params.N_ap):
+                    W_a = W_var[:, a * self.params.M_t:(a + 1) * self.params.M_t].T
+                    cons.append(cp.norm(W_a, 'fro') ** 2 <= self.params.P_max)
+
+                # Original objective
+                orig_objective = lambda_ * gamma_var + (1 - lambda_) * u_sens_total
+
+                # Objective
+                obj = cp.Maximize(orig_objective - xi_slack * cp.sum(s_users))
+                prob = cp.Problem(obj, cons)
+                prob.solve(solver=cp.ECOS)
+
+                # Update W and gamma
+                W_new = W_var.value
+                W_new = np.reshape(W_new, (self.params.N_ue + 1, self.params.M_t, self.params.N_ap), order='F')
+                W = np.transpose(W_new, axes=(1, 0, 2))
+                gamma_new = gamma_var.value
+
+                # Update interference
+                H_W_admm = self.calc_product_H_W(H_mat_comm, W)
+                for u in range(self.params.N_ue):
+                    I_users[u] = (np.linalg.norm(H_W_admm[u, :]) ** 2) - (np.abs(H_W_admm[u, u]) ** 2)
+            res = np.abs(gamma_prev - gamma_new)
+            if print_log: print('Iter:', it, 'gamma:', gamma_new, 'residual:', res)
+            # ==== Stopping criteria ====
+            if res < conv_thresh:
+                if print_log: print('==**== ADMM converged ==**==')
+                break
+            gamma_prev = gamma_new
+        # ==== Final output ====
+        W_star = W
+        return W_star
+
 
     def calc_product_H_W(self, H_mat_comm, W_mat):
         H_W = np.zeros((self.params.N_ue, self.params.N_ue + 1), dtype=complex)

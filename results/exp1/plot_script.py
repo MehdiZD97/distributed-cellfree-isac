@@ -13,7 +13,7 @@ data_dir = 'data/'
 
 SAVE_FIG_BAR = False
 SAVE_FIG_LINE = False
-SAVE_FIG_JOINT = True
+SAVE_FIG_JOINT = False
 
 #%% Loading the data
 
@@ -203,7 +203,7 @@ plt.rcParams.update({
     'axes.titlesize': 10,    # title (if you have one)
 })
 
-plt.figure(figsize=(10, 4))
+plt.figure(figsize=(10, 4.5))
 
 plt.subplot(1, 2, 1)
 # group_labels = ['PSR: 0.2', 'SplitOpt', 'PSR: 0.8']
@@ -225,7 +225,7 @@ for i in range(n_bars):
 plt.yticks(group_indices, group_labels)
 plt.xlabel('Value (dB)')
 handles, labels = plt.gca().get_legend_handles_labels()
-plt.legend(handles[::-1], labels[::-1], title='Bar Type', loc='best', fontsize=12)
+plt.legend(handles[::-1], labels[::-1], title='Bar Type', loc='best', fontsize=14)
 plt.grid(True, axis='x', linestyle='--', alpha=0.7)
 
 
@@ -242,15 +242,16 @@ plt.plot(sinr_cons_values, mean_sinr_Nue6, linestyle='-', marker=markers[2], col
 plt.xticks(sinr_cons_values)
 plt.yticks(np.arange(5, 21, 1))
 plt.grid(True, linestyle='--', alpha=0.7)
-plt.legend(loc='best', ncol=1)
+plt.legend(loc='best', ncol=1, fontsize=12)
 plt.xlabel('SplitOpt SINR Constraint (dB)')
 plt.ylabel('SINR / Sensing SNR (dB)')
 plt.tight_layout()
 
 if SAVE_FIG_JOINT:
-    prefix1 = f'exp1_jointFig_barNue{N_ue}_TxSNR{TxSNR}dB.png'
+    size_preamble = '10-4p5'
+    prefix1 = f'exp1_jointFig_barNue{N_ue}_TxSNR{TxSNR}dB_{size_preamble}.png'
     lib.save_sim_figure(prefix=prefix1, save_dir=BASE_DIR+'figures/', add_timestamp=False)
-    prefix2 = f'exp1_jointFig_barNue{N_ue}_TxSNR{TxSNR}dB.pdf'
+    prefix2 = f'exp1_jointFig_barNue{N_ue}_TxSNR{TxSNR}dB_{size_preamble}.pdf'
     lib.save_sim_figure(prefix=prefix2, save_dir=BASE_DIR + 'figures/', add_timestamp=False)
 
 plt.show()
