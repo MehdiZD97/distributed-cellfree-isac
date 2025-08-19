@@ -105,7 +105,7 @@ If you use this repository in your research, please cite:
   booktitle = {IEEE Asilomar Conference on Signals, Systems, and Computers},
   year = {2025},
   month = {October},
-  note = {Submitted for review}
+  note = {accepted for publication}
 }
 ```
 
